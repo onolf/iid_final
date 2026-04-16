@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: fct_orders
+    description: "Tabla de hechos de órdenes enriquecida con clima"
+    columns:
+      - name: order_id
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_value_lengths_to_equal:
+              arguments:
+                value: 32
+
+      - name: total_freight
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 10000
+
+      - name: actual_delivery_days
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 365
+
+      - name: is_on_time
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: [true, false]
+
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          arguments:
+            min_value: 90000
+            max_value: 200000
+
+  - name: dim_weather
+    columns:
+      - name: weather_id
+        tests:
+          - unique
+          - not_null
+      - name: precipitation_mm
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 500
+      - name: state_code
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ['AC','AL','AM','AP','BA','CE','DF','ES','GO',
+                            'MA','MG','MS','MT','PA','PB','PE','PI','PR',
+                            'RJ','RN','RO','RR','RS','SC','SE','SP','TO']

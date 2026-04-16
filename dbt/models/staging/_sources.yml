@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: br_ecommerce
+    # database: "iid_final"
+    schema: br_ecommerce
+    tables:
+      - name: orders
+      - name: order_items
+      - name: customers
+      - name: geolocation
+      - name: sellers
+      - name: products
+      - name: order_payments
+
+  - name: br_weather
+    # database: "iid_final"
+    schema: br_weather
+    tables:
+      - name: conventional_weather_stations
+      - name: weather_stations_codes
+      - name: wind_directions_codes

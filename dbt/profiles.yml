@@ -1,0 +1,9 @@
+iid_final:
+  outputs:
+    dev:
+      type: duckdb
+      path: "md:iid_final"
+      extensions:
+          - motherduck
+      motherduck_token: "{{ env_var('MOTHERDUCK_TOKEN') }}"
+  target: dev
