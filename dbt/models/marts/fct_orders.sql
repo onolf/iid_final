@@ -2,11 +2,9 @@
     materialized='incremental',
     unique_key='order_id'
 ) }}
-
 with orders as (
     select * from {{ ref('stg_orders') }}
 ),
-
 items_agg as (
     select
         order_id,
@@ -16,15 +14,12 @@ items_agg as (
     from {{ ref('stg_order_items') }}
     group by order_id
 ),
-
 customers as (
     select * from {{ ref('stg_customers') }}
 ),
-
 weather as (
     select * from {{ ref('dim_weather') }}
 )
-
 select
     o.order_id,
     o.customer_id,
@@ -42,12 +37,11 @@ select
     w.is_rainy_day,
     w.rain_category,
     w.temp_max_c
-
 from orders o
-left join customers      c on o.customer_id     = c.customer_id
-left join items_agg      i on o.order_id        = i.order_id
-left join weather        w on o.order_purchase_date = w.reference_date
-                           and c.customer_state     = w.state_code
+left join customers      c on o.customer_id         = c.customer_id
+left join items_agg      i on o.order_id             = i.order_id
+left join weather        w on o.order_purchase_date  = w.reference_date
+                           and c.customer_state       = w.state_code
 {% if is_incremental() %}
     where o.order_purchase_date > (select max(order_purchase_date) from {{ this }})
 {% endif %}

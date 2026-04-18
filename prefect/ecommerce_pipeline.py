@@ -2,27 +2,46 @@ import requests
 from prefect import flow, task
 from prefect.logging import get_run_logger
 import subprocess, os
+from dotenv import load_dotenv
 
-AIRBYTE_URL = "http://localhost:8000"
-AIRBYTE_CONNECTION_ID = "6bdbca65-cffa-4a63-815e-41e2d360e075"
+load_dotenv()
+
+AIRBYTE_URL = os.getenv("AIRBYTE_URL", "http://localhost:8000")
+AIRBYTE_CONNECTION_ID = os.getenv("AIRBYTE_CONNECTION_ID")
+AIRBYTE_USER = os.getenv("AIRBYTE_USER")
+AIRBYTE_PASS = os.getenv("AIRBYTE_PASS")
+
+CONNECTIONS = {
+    "olist_orders":           os.getenv("OLIST_ORDERS_UUID"),
+    "olist_order_items":      os.getenv("OLIST_ORDER_ITEMS_UUID"),
+    "olist_customers":        os.getenv("OLIST_CUSTOMERS_UUID"),
+    "olist_geolocation":      os.getenv("OLIST_GEOLOCATION_UUID"),
+    "olist_products":         os.getenv("OLIST_PRODUCTS_UUID"),
+    "olist_sellers":          os.getenv("OLIST_SELLERS_UUID"),
+    "olist_order_payments":   os.getenv("OLIST_ORDER_PAYMENTS_UUID"),
+    "olist_order_reviews":    os.getenv("OLIST_ORDER_REVIEWS_UUID"),
+    "weather_stations":       os.getenv("WEATHER_STATIONS_UUID"),
+    "weather_stations_codes": os.getenv("WEATHER_STATIONS_CODES_UUID"),
+    "weather_wind_codes":     os.getenv("WEATHER_WIND_CODES_UUID"),
+}
 
 @task(name="airbyte_sync", retries=2, retry_delay_seconds=30)
-def trigger_airbyte_sync():
+def trigger_airbyte_sync(connection_name: str, connection_id: str):
     logger = get_run_logger()
-    logger.info("Disparando sync en Airbyte...")
-    
-    # Trigger sync via API
+    logger.info(f"Sincronizando: {connection_name}...")
+
     response = requests.post(
         f"{AIRBYTE_URL}/api/v1/connections/sync",
-        json={"connectionId": AIRBYTE_CONNECTION_ID},
-        headers={"Content-Type": "application/json"}
+        json={"connectionId": connection_id},
+        headers={"Content-Type": "application/json"},
+        auth=(AIRBYTE_USER, AIRBYTE_PASS)
     )
-    
+
     if response.status_code != 200:
-        raise Exception(f"Airbyte sync falló: {response.text}")
-    
+        raise Exception(f"{connection_name} falló: {response.status_code} {response.text}")
+
     job_id = response.json()["job"]["id"]
-    logger.info(f"Sync iniciado — job_id: {job_id}")
+    logger.info(f"{connection_name} iniciado — job_id: {job_id}")
     return job_id
 
 @task(name="dbt_run", retries=2, retry_delay_seconds=10)
@@ -59,12 +78,20 @@ def run_dbt_tests():
 def olist_pipeline():
     logger = get_run_logger()
     logger.info("Iniciando pipeline Olist + Weather → MotherDuck")
-    
+
     try:
-        sync_result  = trigger_airbyte_sync()
-        run_result   = run_dbt_models(wait_for=[sync_result])
-        test_result  = run_dbt_tests(wait_for=[run_result])
+        # Disparar todos los syncs EN PARALELO (submit = no espera)
+        sync_futures = [
+            trigger_airbyte_sync.submit(name, conn_id)
+            for name, conn_id in CONNECTIONS.items()
+        ]
+
+        # dbt corre solo cuando TODOS los syncs terminaron
+        run_result  = run_dbt_models(wait_for=sync_futures)
+        test_result = run_dbt_tests(wait_for=[run_result])
+
         logger.info("Pipeline completado exitosamente ✓")
+
     except Exception as e:
         logger.error(f"Pipeline falló: {str(e)}")
         raise
